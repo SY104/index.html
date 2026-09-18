@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Seat Finder</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f4f8',
+                            100: '#d9e2ec',
+                            500: '#102a43',
+                            600: '#0b69a3',
+                            700: '#035388',
+                            800: '#003e6b',
+                            900: '#00214d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS (xlsx) for Excel/CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        .seat-block {
+            transition: all 0.2s ease-in-out;
+        }
+        .seat-block:hover {
+            transform: scale(1.15);
+            z-index: 20;
+        }
+        .seat-active {
+            background-color: #2563eb !important;
+            color: #ffffff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.8);
+            transform: scale(1.12);
+            animation: pulse-ring 1.8s infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+
+    <!-- TOP HEADER / NAVBAR -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <!-- Branding -->
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="showView('student')">
+                    <div class="bg-brand-700 text-white p-2.5 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-chair text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xl font-bold text-slate-900 tracking-tight block">Student Seat Finder</span>
+                        <span class="text-xs text-slate-500 hidden sm:block">Exam & Test Venue Locator</span>
+                    </div>
+                </div>
+
+                <!-- Navigation Switcher -->
+                <div class="flex items-center space-x-2">
+                    <button id="nav-student-btn" onclick="showView('student')" class="px-4 py-2 text-sm font-medium rounded-lg text-brand-700 bg-brand-50 border border-brand-100 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-user-graduate"></i>
+                        <span>Student Portal</span>
+                    </button>
+                    <button id="nav-admin-btn" onclick="openAdminModal()" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-lock text-xs"></i>
+                        <span>Admin Portal</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- STUDENT VIEW -->
+        <div id="student-view" class="space-y-8">
+            
+            <!-- SEARCH CARD -->
+            <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200/80 max-w-3xl mx-auto">
+                <div class="text-center max-w-xl mx-auto mb-6">
+                    <h1 class="text-2xl font-bold text-slate-900 sm:text-3xl">Find Your Assigned Seat</h1>
+                    <p class="text-slate-500 mt-2 text-sm sm:text-base">Enter your Student ID (SID) to instantly look up your venue location and seat assignment.</p>
+                </div>
+
+                <form onsubmit="handleStudentSearch(event)" class="space-y-4">
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="relative flex-grow">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-id-card text-lg"></i>
+                            </div>
+                            <input 
+                                type="text" 
+                                id="student-sid-input"
+                                placeholder="e.g. 20888888" 
+                                required
+                                class="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:bg-white transition-all font-medium uppercase tracking-wider"
+                            >
+                        </div>
+                        <button 
+                            type="submit" 
+                            class="w-full sm:w-auto px-8 py-3.5 bg-brand-700 hover:bg-brand-800 text-white font-semibold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-base active:scale-95"
+                        >
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <span>Look Up</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Search Error Message -->
+                <div id="search-error" class="hidden mt-4 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center gap-3">
+                    <i class="fa-solid fa-circle-exclamation text-lg flex-shrink-0"></i>
+                    <span id="search-error-text">No record found for the provided Student ID. Please double check and try again.</span>
+                </div>
+            </div>
+
+            <!-- RESULT DISPLAY PANEL -->
+            <div id="student-result-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- Banner Header -->
+                <div class="bg-gradient-to-r from-brand-800 to-brand-600 p-6 text-white sm:p-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl sm:text-3xl font-extrabold text-white" id="res-name">Student Name</h2>
+                            <p class="text-slate-200 text-sm mt-1">Student ID: <span id="res-sid" class="font-mono font-bold">--</span></p>
+                            <span class="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-semibold uppercase tracking-wider mt-3" id="res-subject">MARK3220</span>
+                        </div>
+                        
+                        <!-- Highlight Cards Container -->
+                        <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                            <div class="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[140px] flex-1 sm:flex-initial">
+                                <span class="text-xs uppercase tracking-wider text-slate-200 block font-medium">Test Venue</span>
+                                <span class="text-2xl sm:text-3xl font-black text-white mt-0.5 block tracking-tight" id="res-venue-badge">--</span>
+                            </div>
+                            
+                            <div class="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 text-center min-w-[140px] flex-1 sm:flex-initial">
+                                <span class="text-xs uppercase tracking-wider text-slate-200 block font-medium">Assigned Seat</span>
+                                <span class="text-3xl sm:text-4xl font-black text-white mt-0.5 block tracking-tight" id="res-seat">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detail Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-slate-50/50 border-b border-slate-200">
+                    <div class="p-5 flex items-center gap-4">
+                        <div class="p-3 bg-blue-100 text-blue-700 rounded-xl">
+                            <i class="fa-solid fa-building text-xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Test Venue</span>
+                            <span class="text-base font-bold text-slate-800" id="res-venue">--</span>
+                        </div>
+                    </div>
+                    <div class="p-5 flex items-center gap-4">
+                        <div class="p-3 bg-indigo-100 text-indigo-700 rounded-xl">
+                            <i class="fa-solid fa-clock text-xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Test Date & Time</span>
+                            <span class="text-base font-bold text-slate-800" id="res-time">--</span>
+                        </div>
+                    </div>
+                    <div class="p-5 flex items-center gap-4">
+                        <div class="p-3 bg-emerald-100 text-emerald-700 rounded-xl">
+                            <i class="fa-solid fa-map-pin text-xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Seat Position</span>
+                            <span class="text-base font-bold text-slate-800" id="res-position">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Remarks Banner (Conditional) -->
+                <div id="res-remarks-container" class="hidden bg-amber-50 border-b border-amber-200 px-6 py-3.5 text-amber-800 text-sm flex items-start gap-2.5">
+                    <i class="fa-solid fa-circle-info text-amber-600 mt-0.5"></i>
+                    <div>
+                        <span class="font-semibold">Special Instructions / Remarks:</span>
+                        <span id="res-remarks-text" class="ml-1 text-amber-900">--</span>
+                    </div>
+                </div>
+
+                <!-- Interactive Map Section -->
+                <div class="p-4 sm:p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Venue Floor Plan</h3>
+                            <p class="text-xs text-slate-500">Your seat position is highlighted on the map below.</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-medium text-slate-600">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-3 h-3 rounded bg-blue-600 inline-block shadow-sm"></span>
+                                <span>Your Seat</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-3 h-3 rounded bg-white border border-slate-900 inline-block"></span>
+                                <span>Available Seat</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Compact Seating Layout Container -->
+                    <div class="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200 overflow-x-auto shadow-inner flex justify-center">
+                        <div class="w-full max-w-xl p-3 bg-white border border-slate-800 rounded-lg select-none font-sans" id="venue-map-render">
+                            
+                            <!-- TOP HEADER ROW -->
+                            <div class="grid grid-cols-12 gap-1 items-center mb-2">
+                                <div class="col-span-2 text-center border border-slate-800 py-0.5 font-bold text-[9px] tracking-widest text-slate-700 bg-slate-100 rounded-[2px]">
+                                    EXIT
+                                </div>
+                                <div class="col-span-8 text-center border border-slate-800 py-0.5 font-bold text-[10px] tracking-widest text-slate-800 bg-slate-100 rounded-[2px]">
+                                    FRONT / PODIUM
+                                </div>
+                                <div class="col-span-2 text-center border border-slate-800 py-0.5 font-bold text-[9px] tracking-widest text-slate-700 bg-slate-100 rounded-[2px]">
+                                    EXIT
+                                </div>
+                            </div>
+
+                            <!-- COMPUTER DESK STATION -->
+                            <div class="w-16 text-center border border-slate-800 py-0.5 font-bold text-[8px] mb-3 bg-slate-50 rounded-[2px] text-slate-600">
+                                DESK
+                            </div>
+
+                            <!-- MAIN MAP GRID: TOP WINGS (SECTION A & SECTION C) -->
+                            <div class="grid grid-cols-2 gap-2 mb-3">
+                                
+                                <!-- SECTION A (LEFT WING) -->
+                                <div class="flex items-center gap-0.5 justify-start">
+                                    <!-- Col 4 (Outer): A8 - A11 -->
+                                    <div class="flex flex-col gap-1">
+                                        <div id="seat-A8" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A8</div>
+                                        <div id="seat-A9" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A9</div>
+                                        <div id="seat-A10" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A10</div>
+                                        <div id="seat-A11" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A11</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-28 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 3: A5 - A7 -->
+                                    <div class="flex flex-col gap-1 pt-1">
+                                        <div id="seat-A5" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A5</div>
+                                        <div id="seat-A6" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A6</div>
+                                        <div id="seat-A7" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A7</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-24 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 2: A2 - A4 -->
+                                    <div class="flex flex-col gap-1">
+                                        <div id="seat-A2" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A2</div>
+                                        <div id="seat-A3" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A3</div>
+                                        <div id="seat-A4" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A4</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-24 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 1 (Inner): A1 -->
+                                    <div class="flex flex-col justify-center">
+                                        <div id="seat-A1" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">A1</div>
+                                    </div>
+
+                                    <!-- Inner Partition Bar -->
+                                    <div class="w-0.5 bg-slate-900 h-20 self-center ml-0.5"></div>
+                                </div>
+
+                                <!-- SECTION C (RIGHT WING) -->
+                                <div class="flex items-center gap-0.5 justify-end">
+                                    <!-- Inner Partition Bar -->
+                                    <div class="w-0.5 bg-slate-900 h-20 self-center mr-0.5"></div>
+
+                                    <!-- Col 1 (Inner): C1 -->
+                                    <div class="flex flex-col justify-center">
+                                        <div id="seat-C1" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C1</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-24 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 2: C2 - C4 -->
+                                    <div class="flex flex-col gap-1">
+                                        <div id="seat-C2" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C2</div>
+                                        <div id="seat-C3" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C3</div>
+                                        <div id="seat-C4" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C4</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-24 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 3: C5 - C7 -->
+                                    <div class="flex flex-col gap-1 pt-1">
+                                        <div id="seat-C5" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C5</div>
+                                        <div id="seat-C6" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C6</div>
+                                        <div id="seat-C7" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C7</div>
+                                    </div>
+
+                                    <!-- Vertical Divider -->
+                                    <div class="w-0.5 bg-slate-900 h-28 self-stretch my-auto mx-0.5"></div>
+
+                                    <!-- Col 4 (Outer): C8 - C11 -->
+                                    <div class="flex flex-col gap-1">
+                                        <div id="seat-C8" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C8</div>
+                                        <div id="seat-C9" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C9</div>
+                                        <div id="seat-C10" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C10</div>
+                                        <div id="seat-C11" class="seat-block w-8 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">C11</div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- BOTTOM CENTER (SECTION B) -->
+                            <div class="flex flex-col items-center space-y-1 mt-1">
+                                <!-- Horizontal Bar 0 -->
+                                <div class="h-0.5 bg-slate-900 w-20"></div>
+
+                                <!-- B1 -->
+                                <div>
+                                    <div id="seat-B1" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B1</div>
+                                </div>
+
+                                <!-- Horizontal Bar 1 -->
+                                <div class="h-0.5 bg-slate-900 w-44"></div>
+
+                                <!-- B2, B3, B4 -->
+                                <div class="flex gap-1.5">
+                                    <div id="seat-B2" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B2</div>
+                                    <div id="seat-B3" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B3</div>
+                                    <div id="seat-B4" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B4</div>
+                                </div>
+
+                                <!-- Horizontal Bar 2 -->
+                                <div class="h-0.5 bg-slate-900 w-[230px]"></div>
+
+                                <!-- B5, B6, B7 -->
+                                <div class="flex gap-3">
+                                    <div id="seat-B5" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B5</div>
+                                    <div id="seat-B6" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B6</div>
+                                    <div id="seat-B7" class="seat-block w-11 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B7</div>
+                                </div>
+
+                                <!-- Horizontal Bar 3 -->
+                                <div class="h-0.5 bg-slate-900 w-[260px]"></div>
+
+                                <!-- B8, B9, B10, B11 -->
+                                <div class="flex gap-1.5">
+                                    <div id="seat-B8" class="seat-block w-10 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B8</div>
+                                    <div id="seat-B9" class="seat-block w-10 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B9</div>
+                                    <div id="seat-B10" class="seat-block w-10 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B10</div>
+                                    <div id="seat-B11" class="seat-block w-10 h-6 border border-slate-900 rounded-[2px] flex items-center justify-center font-bold text-[10px] bg-white text-slate-800">B11</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMIN VIEW -->
+        <div id="admin-view" class="hidden space-y-6">
+            
+            <!-- ADMIN TOP BAR -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-user-gear text-brand-700"></i>
+                        <span>Admin Seat Management</span>
+                    </h1>
+                    <p class="text-slate-500 text-sm mt-1">Manage seat allocations, import spreadsheets, and customize test parameters.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="downloadExcelTemplate()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                        <span>Excel Template</span>
+                    </button>
+                    <label class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors cursor-pointer flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-file-import"></i>
+                        <span>Upload Excel/CSV</span>
+                        <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" onchange="handleExcelUpload(event)" class="hidden">
+                    </label>
+                    <button onclick="openRecordModal()" class="px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white font-semibold rounded-xl text-sm transition-colors flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Add Record</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- EXCEL PREVIEW BANNER -->
+            <div id="excel-preview-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-blue-900 flex items-center gap-2">
+                            <i class="fa-solid fa-file-lines"></i>
+                            <span>Import Data Preview</span>
+                        </h3>
+                        <p class="text-xs text-blue-700 mt-0.5">Please review the imported rows below before committing changes to memory.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="confirmExcelImport()" class="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow transition-colors">
+                            Confirm Import (<span id="import-count">0</span> rows)
+                        </button>
+                        <button onclick="cancelExcelImport()" class="px-3 py-1.5 bg-white border border-blue-300 text-blue-800 text-xs font-semibold rounded-lg hover:bg-blue-100">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-48 border border-blue-200 rounded-xl bg-white">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-blue-100/50 text-blue-900 sticky top-0 font-bold border-b border-blue-200">
+                            <tr>
+                                <th class="p-2">SID</th>
+                                <th class="p-2">Name</th>
+                                <th class="p-2">Subject</th>
+                                <th class="p-2">Test Venue</th>
+                                <th class="p-2">Seat</th>
+                                <th class="p-2">Test Date & Time</th>
+                                <th class="p-2">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="excel-preview-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- STATS AND SEARCH BAR -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-brand-50 text-brand-700 rounded-xl">
+                        <i class="fa-solid fa-users text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 font-semibold uppercase">Total Allocations</span>
+                        <span id="stat-total" class="text-xl font-bold text-slate-800 block">0</span>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-emerald-50 text-emerald-700 rounded-xl">
+                        <i class="fa-solid fa-building text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 font-semibold uppercase">Active Test Venues</span>
+                        <span id="stat-venues" class="text-xl font-bold text-slate-800 block">0</span>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm md:col-span-2 flex items-center px-4">
+                    <div class="relative w-full">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input 
+                            type="text" 
+                            id="admin-search-input"
+                            oninput="renderAdminTable()"
+                            placeholder="Search records by SID, Name, Subject, Test Venue, or Seat..." 
+                            class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:bg-white"
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLE CONTAINER -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4">Student ID</th>
+                                <th class="py-3 px-4">Name</th>
+                                <th class="py-3 px-4">Subject</th>
+                                <th class="py-3 px-4">Test Venue</th>
+                                <th class="py-3 px-4">Seat No.</th>
+                                <th class="py-3 px-4">Test Date & Time</th>
+                                <th class="py-3 px-4">Remarks</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-table-body" class="divide-y divide-slate-100 font-medium"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ADMIN PASSWORD MODAL -->
+    <div id="admin-auth-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 bg-brand-50 text-brand-700 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <i class="fa-solid fa-lock text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900">Admin Authentication</h3>
+                <p class="text-xs text-slate-500 mt-1">Please enter the administrator passcode to manage seat data.</p>
+            </div>
+            <form onsubmit="handleAdminAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+                    <input 
+                        type="password" 
+                        id="admin-pass-input" 
+                        placeholder="Enter admin passcode" 
+                        required
+                        class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600"
+                    >
+                    <p id="admin-auth-error" class="hidden text-xs text-red-600 mt-2 flex items-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                        <span>Incorrect password. Please try again.</span>
+                    </p>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeAdminModal()" class="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="w-1/2 py-2.5 bg-brand-700 hover:bg-brand-800 text-white text-sm font-semibold rounded-xl transition-colors shadow">
+                        Unlock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RECORD EDIT/ADD MODAL -->
+    <div id="record-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-bold text-slate-900" id="record-modal-title">Add Seat Allocation</h3>
+                <button onclick="closeRecordModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <form onsubmit="saveRecord(event)" class="space-y-3">
+                <input type="hidden" id="edit-index" value="-1">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Student ID (SID)</label>
+                        <input type="text" id="rec-sid" required placeholder="20888888" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Student Name</label>
+                        <input type="text" id="rec-name" required placeholder="Alex Chan" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Subject Code</label>
+                        <input type="text" id="rec-subject" required placeholder="MARK3220" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Test Venue</label>
+                        <input type="text" id="rec-venue" required placeholder="LSK G001" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Assigned Seat</label>
+                        <input type="text" id="rec-seat" required placeholder="A1" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Test Date & Time</label>
+                        <input type="text" id="rec-time" required placeholder="20 Oct (Mon) 19:00" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Special Remarks / Instructions</label>
+                    <input type="text" id="rec-remarks" placeholder="Left-handed desk requested" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div class="flex gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeRecordModal()" class="w-1/2 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="w-1/2 py-2 bg-brand-700 hover:bg-brand-800 text-white text-sm font-semibold rounded-lg transition-colors shadow">
+                        Save Record
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- APP SCRIPT LOGIC -->
+    <script>
+        // Sample Initial Data Seed
+        let seatData = [
+            { sid: "20888888", name: "Alex Chan", subject: "MARK3220", venue: "LSK G001", seat: "A1", time: "20 Oct (Mon) 19:00-20:30", remarks: "Please arrive 15 minutes before exam start time." },
+            { sid: "20777777", name: "Roxanne Li", subject: "MARK3220", venue: "LSK G001", seat: "B5", time: "20 Oct (Mon) 19:00-20:30", remarks: "" },
+            { sid: "20666666", name: "Eric Wong", subject: "MARK3220", venue: "LSK G001", seat: "C8", time: "20 Oct (Mon) 19:00-20:30", remarks: "Special accommodation desk requested." },
+            { sid: "20555555", name: "Ansley Zhang", subject: "MARK3220", venue: "LSK G001", seat: "A11", time: "20 Oct (Mon) 19:00-20:30", remarks: "" },
+        ];
+
+        let pendingImportData = [];
+        let isAuthenticated = false;
+
+        // View Navigation Switcher
+        function showView(view) {
+            const studentView = document.getElementById('student-view');
+            const adminView = document.getElementById('admin-view');
+            const studentBtn = document.getElementById('nav-student-btn');
+            const adminBtn = document.getElementById('nav-admin-btn');
+
+            if (view === 'student') {
+                studentView.classList.remove('hidden');
+                adminView.classList.add('hidden');
+                studentBtn.className = "px-4 py-2 text-sm font-medium rounded-lg text-brand-700 bg-brand-50 border border-brand-100 transition-colors flex items-center gap-2";
+                adminBtn.className = "px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-2";
+            } else {
+                studentView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                adminBtn.className = "px-4 py-2 text-sm font-medium rounded-lg text-brand-700 bg-brand-50 border border-brand-100 transition-colors flex items-center gap-2";
+                studentBtn.className = "px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-2";
+                renderAdminTable();
+            }
+        }
+
+        // Student Search Handling
+        function handleStudentSearch(e) {
+            e.preventDefault();
+            const sidInput = document.getElementById('student-sid-input').value.trim().toUpperCase();
+            const errorBanner = document.getElementById('search-error');
+            const resultCard = document.getElementById('student-result-card');
+
+            const record = seatData.find(item => item.sid.trim().toUpperCase() === sidInput);
+
+            if (!record) {
+                errorBanner.classList.remove('hidden');
+                resultCard.classList.add('hidden');
+                return;
+            }
+
+            errorBanner.classList.add('hidden');
+            resultCard.classList.remove('hidden');
+
+            // Populate Text Details
+            document.getElementById('res-name').innerText = record.name;
+            document.getElementById('res-sid').innerText = record.sid;
+            document.getElementById('res-subject').innerText = record.subject;
+            document.getElementById('res-venue-badge').innerText = record.venue;
+            document.getElementById('res-seat').innerText = record.seat;
+            document.getElementById('res-venue').innerText = record.venue;
+            document.getElementById('res-time').innerText = record.time;
+            document.getElementById('res-position').innerText = `Seat ${record.seat} (${record.venue})`;
+
+            // Remarks Handling
+            const remarksContainer = document.getElementById('res-remarks-container');
+            if (record.remarks && record.remarks.trim() !== '') {
+                document.getElementById('res-remarks-text').innerText = record.remarks;
+                remarksContainer.classList.remove('hidden');
+            } else {
+                remarksContainer.classList.add('hidden');
+            }
+
+            // Highlight Map Seat
+            highlightSeatOnMap(record.seat);
+
+            // Smooth Scroll to Result Card
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Map Seat Highlighting Logic
+        function highlightSeatOnMap(targetSeatCode) {
+            const normalizedTarget = targetSeatCode.trim().toUpperCase();
+
+            // Clear previous active states
+            const allSeats = document.querySelectorAll('.seat-block');
+            allSeats.forEach(seat => {
+                seat.classList.remove('seat-active');
+            });
+
+            // Find matching seat element
+            const activeSeatEl = document.getElementById(`seat-${normalizedTarget}`);
+            if (activeSeatEl) {
+                activeSeatEl.classList.add('seat-active');
+            }
+        }
+
+        // Admin Auth Modal
+        function openAdminModal() {
+            if (isAuthenticated) {
+                showView('admin');
+            } else {
+                document.getElementById('admin-auth-modal').classList.remove('hidden');
+                document.getElementById('admin-pass-input').focus();
+            }
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-auth-modal').classList.add('hidden');
+            document.getElementById('admin-auth-error').classList.add('hidden');
+            document.getElementById('admin-pass-input').value = '';
+        }
+
+        function handleAdminAuth(e) {
+            e.preventDefault();
+            const pass = document.getElementById('admin-pass-input').value;
+            if (pass === 'admin' || pass === '1234' || pass === 'ust') {
+                isAuthenticated = true;
+                closeAdminModal();
+                showView('admin');
+            } else {
+                document.getElementById('admin-auth-error').classList.remove('hidden');
+            }
+        }
+
+        // Admin Table Rendering & Stats
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-table-body');
+            const searchVal = document.getElementById('admin-search-input').value.toLowerCase();
+            tbody.innerHTML = '';
+
+            const filteredData = seatData.filter(item => {
+                return (
+                    item.sid.toLowerCase().includes(searchVal) ||
+                    item.name.toLowerCase().includes(searchVal) ||
+                    item.subject.toLowerCase().includes(searchVal) ||
+                    item.venue.toLowerCase().includes(searchVal) ||
+                    item.seat.toLowerCase().includes(searchVal)
+                );
+            });
+
+            // Update Stats
+            document.getElementById('stat-total').innerText = seatData.length;
+            const uniqueVenues = new Set(seatData.map(i => i.venue));
+            document.getElementById('stat-venues').innerText = uniqueVenues.size;
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-slate-400">
+                            No matching seat allocation records found.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filteredData.forEach((item) => {
+                const realIndex = seatData.indexOf(item);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-slate-800">${item.sid}</td>
+                    <td class="py-3 px-4 text-slate-900">${item.name}</td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 bg-slate-100 rounded text-xs font-semibold text-slate-700">${item.subject}</span></td>
+                    <td class="py-3 px-4">${item.venue}</td>
+                    <td class="py-3 px-4 font-bold text-brand-700">${item.seat}</td>
+                    <td class="py-3 px-4 text-xs text-slate-500">${item.time}</td>
+                    <td class="py-3 px-4 text-xs text-slate-500 truncate max-w-[150px]">${item.remarks || '--'}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="editRecord(${realIndex})" class="text-brand-600 hover:text-brand-800 mr-2 p-1">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="deleteRecord(${realIndex})" class="text-red-500 hover:text-red-700 p-1">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Add/Edit Record Modals
+        function openRecordModal() {
+            document.getElementById('edit-index').value = "-1";
+            document.getElementById('record-modal-title').innerText = "Add Seat Allocation";
+            document.getElementById('rec-sid').value = '';
+            document.getElementById('rec-name').value = '';
+            document.getElementById('rec-subject').value = 'MARK3220';
+            document.getElementById('rec-venue').value = 'LSK G001';
+            document.getElementById('rec-seat').value = '';
+            document.getElementById('rec-time').value = '20 Oct (Mon) 19:00-20:30';
+            document.getElementById('rec-remarks').value = '';
+
+            document.getElementById('record-modal').classList.remove('hidden');
+        }
+
+        function editRecord(index) {
+            const item = seatData[index];
+            document.getElementById('edit-index').value = index;
+            document.getElementById('record-modal-title').innerText = "Edit Seat Allocation";
+            document.getElementById('rec-sid').value = item.sid;
+            document.getElementById('rec-name').value = item.name;
+            document.getElementById('rec-subject').value = item.subject;
+            document.getElementById('rec-venue').value = item.venue;
+            document.getElementById('rec-seat').value = item.seat;
+            document.getElementById('rec-time').value = item.time;
+            document.getElementById('rec-remarks').value = item.remarks;
+
+            document.getElementById('record-modal').classList.remove('hidden');
+        }
+
+        function closeRecordModal() {
+            document.getElementById('record-modal').classList.add('hidden');
+        }
+
+        function saveRecord(e) {
+            e.preventDefault();
+            const editIndex = parseInt(document.getElementById('edit-index').value);
+
+            const newObj = {
+                sid: document.getElementById('rec-sid').value.trim().toUpperCase(),
+                name: document.getElementById('rec-name').value.trim(),
+                subject: document.getElementById('rec-subject').value.trim().toUpperCase(),
+                venue: document.getElementById('rec-venue').value.trim(),
+                seat: document.getElementById('rec-seat').value.trim().toUpperCase(),
+                time: document.getElementById('rec-time').value.trim(),
+                remarks: document.getElementById('rec-remarks').value.trim(),
+            };
+
+            if (editIndex >= 0) {
+                seatData[editIndex] = newObj;
+            } else {
+                seatData.push(newObj);
+            }
+
+            closeRecordModal();
+            renderAdminTable();
+        }
+
+        function deleteRecord(index) {
+            const item = seatData[index];
+            if (item) {
+                seatData.splice(index, 1);
+                renderAdminTable();
+            }
+        }
+
+        // Excel / CSV File Import Handling
+        function handleExcelUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!jsonData || jsonData.length === 0) {
+                        return;
+                    }
+
+                    pendingImportData = jsonData.map(row => ({
+                        sid: String(row['Student ID'] || row['SID'] || row['sid'] || '').trim(),
+                        name: String(row['Name'] || row['Student Name'] || row['name'] || '').trim(),
+                        subject: String(row['Subject'] || row['Course'] || row['subject'] || 'MARK3220').trim(),
+                        venue: String(row['Venue'] || row['Test Venue'] || row['venue'] || 'LSK G001').trim(),
+                        seat: String(row['Seat'] || row['Assigned Seat'] || row['seat'] || '').trim(),
+                        time: String(row['Time'] || row['Test Time'] || row['time'] || '20 Oct (Mon) 19:00').trim(),
+                        remarks: String(row['Remarks'] || row['remarks'] || '').trim(),
+                    })).filter(item => item.sid !== '');
+
+                    if (pendingImportData.length === 0) {
+                        return;
+                    }
+
+                    renderImportPreview(pendingImportData);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderImportPreview(data) {
+            const banner = document.getElementById('excel-preview-banner');
+            const tbody = document.getElementById('excel-preview-body');
+            document.getElementById('import-count').innerText = data.length;
+
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-2 font-mono font-bold">${item.sid}</td>
+                    <td class="p-2">${item.name}</td>
+                    <td class="p-2">${item.subject}</td>
+                    <td class="p-2">${item.venue}</td>
+                    <td class="p-2 font-bold text-brand-700">${item.seat}</td>
+                    <td class="p-2 text-slate-500">${item.time}</td>
+                    <td class="p-2 text-slate-500">${item.remarks || '--'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            banner.classList.remove('hidden');
+        }
+
+        function confirmExcelImport() {
+            if (pendingImportData.length > 0) {
+                seatData = [...pendingImportData];
+                pendingImportData = [];
+                document.getElementById('excel-preview-banner').classList.add('hidden');
+                document.getElementById('excel-file-input').value = '';
+                renderAdminTable();
+            }
+        }
+
+        function cancelExcelImport() {
+            pendingImportData = [];
+            document.getElementById('excel-preview-banner').classList.add('hidden');
+            document.getElementById('excel-file-input').value = '';
+        }
+
+        // Excel Template Generator
+        function downloadExcelTemplate() {
+            const templateData = [
+                { "Student ID": "20888888", "Name": "Alex Chan", "Subject": "MARK3220", "Venue": "LSK G001", "Seat": "A1", "Time": "20 Oct (Mon) 19:00-20:30", "Remarks": "Front row seat" },
+                { "Student ID": "20777777", "Name": "Roxanne Li", "Subject": "MARK3220", "Venue": "LSK G001", "Seat": "B5", "Time": "20 Oct (Mon) 19:00-20:30", "Remarks": "" },
+                { "Student ID": "20666666", "Name": "Eric Wong", "Subject": "MARK3220", "Venue": "LSK G001", "Seat": "C8", "Time": "20 Oct (Mon) 19:00-20:30", "Remarks": "Left hand desk" }
+            ];
+
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Seats");
+            XLSX.writeFile(wb, "Seat_Allocation_Template.xlsx");
+        }
+    </script>
+</body>
+</html>
